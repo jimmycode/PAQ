@@ -5,7 +5,7 @@
       "model_path": "data/models/answer_extractors/answer_extractor_nq_base",
       "config_path": "data/models/answer_extractors/answer_extractor_nq_base",
       "tokenizer_path": "data/models/answer_extractors/answer_extractor_nq_base",
-      "topk": 8,
+      "topk": 16,
       "max_answer_len": 30,
       "max_seq_len": 256,
       "doc_stride": 128,
