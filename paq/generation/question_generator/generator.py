@@ -5,10 +5,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 import logging
-from typing import List, Union, Set
-from tqdm.auto import tqdm
 import warnings
-import torch
+from typing import List, Union
+
+from tqdm.auto import tqdm
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
@@ -17,7 +17,6 @@ from transformers import AutoConfig, AutoModelForSeq2SeqLM, AutoTokenizer
 from transformers.pipelines import Text2TextGenerationPipeline
 from paq.paq_utils import to_fp16
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -25,7 +24,6 @@ def _batch_iterator(context_answer_pairs,
                     batch_size,
                     include_title: bool = True,
                     ):
-
     def _answer_context_pair_2_text(answer, context):
         answer_start, answer_end, answer_text = answer["start"], answer['end'], answer['text']
         return context[:answer_start] + "** " + context[answer_start:answer_end] + " **" + context[answer_end:]
@@ -46,10 +44,11 @@ def _batch_iterator(context_answer_pairs,
         context = context_answer_pair["passage"]
         answers = context_answer_pair["answers"]
         title = context_answer_pair["metadata"]["title"] if include_title else None
+        metadata = context_answer_pair["metadata"]
 
         for answer in answers:
             input_text = _create_input_text(context, answer, title)
-            iter_batch.append((passage_id, answer, input_text))
+            iter_batch.append((passage_id, answer, input_text, metadata))
 
             if len(iter_batch) >= batch_size:
                 yield iter_batch
@@ -63,17 +62,17 @@ class QuestionGenerator:
     name = "question_generator/standard"
 
     def __init__(
-        self,
-        model_path: str,
-        config_path: str = None,
-        tokenizer_path: str = None,
-        include_title: bool = True,
-        num_beams: int = None,
-        num_return_sequences: int = 1,
-        max_question_len: int = 30,
-        batch_size: int = 1,
-        device: int = 0,
-        **kwargs
+            self,
+            model_path: str,
+            config_path: str = None,
+            tokenizer_path: str = None,
+            include_title: bool = True,
+            num_beams: int = None,
+            num_return_sequences: int = 1,
+            max_question_len: int = 30,
+            batch_size: int = 1,
+            device: int = 0,
+            **kwargs
     ):
         assert model_path is not None
 
@@ -139,19 +138,19 @@ class QuestionGenerator:
     def generate_questions_from_passage_answer_pairs(self, passage_answer_pairs, disable_tqdm=False):
         outputs = []
         for batch in tqdm(
-            _batch_iterator(passage_answer_pairs, self.batch_size, include_title=self.include_title),
-            disable=disable_tqdm,
-            total=len(passage_answer_pairs) // self.batch_size
+                _batch_iterator(passage_answer_pairs, self.batch_size, include_title=self.include_title),
+                disable=disable_tqdm,
+                total=len(passage_answer_pairs) // self.batch_size + 1
         ):
             # try:
-            batch_ids, batch_answers, batch_inputs = zip(*batch)
+            batch_ids, batch_answers, batch_inputs, batch_metadata = zip(*batch)
             batch_questions, batch_scores = self.generate_question(list(batch_inputs))
             # except Exception as e:
             #     logging.info('skipping Broken batch')
             #     continue
 
-            for passage_id, answer, questions, scores in zip(batch_ids, batch_answers, batch_questions,
-                                                             batch_scores):
+            for passage_id, metadata, answer, questions, scores in zip(
+                    batch_ids, batch_metadata, batch_answers, batch_questions, batch_scores):
                 for question, score in zip(questions, scores):
                     output = {
                         "passage_id": passage_id,
@@ -162,6 +161,7 @@ class QuestionGenerator:
                             "answer_end": answer["end"],
                             "ae_score": answer["score"],
                             "qg_score": score,
+                            **metadata,
                         },
                     }
                     outputs.append(output)
