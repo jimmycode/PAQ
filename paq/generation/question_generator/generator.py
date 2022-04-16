@@ -140,7 +140,7 @@ class QuestionGenerator:
         for batch in tqdm(
                 _batch_iterator(passage_answer_pairs, self.batch_size, include_title=self.include_title),
                 disable=disable_tqdm,
-                total=len(passage_answer_pairs) // self.batch_size + 1
+                total=len(passage_answer_pairs) * len(passage_answer_pairs[0]["answers"]) // self.batch_size + 1
         ):
             # try:
             batch_ids, batch_answers, batch_inputs, batch_metadata = zip(*batch)
